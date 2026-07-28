@@ -1,0 +1,155 @@
+# Example NL-to-SQL pairs — used as few-shot examples in RAG
+# These demonstrate correct SQL patterns for common question types
+
+examples:
+  - question: "What are the top 5 products by revenue?"
+    sql: |
+      SELECT p.product_name, SUM(oi.line_total) AS revenue
+      FROM products p
+      JOIN order_items oi ON oi.product_id = p.product_id
+      JOIN orders o ON o.order_id = oi.order_id
+      WHERE o.status = 'completed'
+      GROUP BY p.product_name
+      ORDER BY revenue DESC
+      LIMIT 5
+    explanation: "Joins products → order_items → orders, filters completed orders, groups by product, orders by revenue descending, limits to 5."
+    tables: ["products", "order_items", "orders"]
+    category: "ranking"
+    difficulty: "medium"
+
+  - question: "What is the total revenue by region?"
+    sql: |
+      SELECT r.region_name, SUM(oi.line_total) AS total_revenue
+      FROM regions r
+      JOIN customers c ON c.region_id = r.region_id
+      JOIN orders o ON o.customer_id = c.customer_id
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+      GROUP BY r.region_name
+      ORDER BY total_revenue DESC
+    explanation: "Full join chain from regions through customers and orders to order_items. Groups by region to get revenue per region."
+    tables: ["regions", "customers", "orders", "order_items"]
+    category: "aggregation"
+    difficulty: "medium"
+
+  - question: "How many orders were placed last month?"
+    sql: |
+      SELECT COUNT(*) AS order_count
+      FROM orders
+      WHERE order_date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        AND order_date < DATE_TRUNC('month', CURRENT_DATE)
+    explanation: "Uses DATE_TRUNC to get the first day of last month and this month for precise date range."
+    tables: ["orders"]
+    category: "count"
+    difficulty: "easy"
+
+  - question: "What is the average order value by customer segment?"
+    sql: |
+      SELECT c.segment, AVG(o.total_amount) AS avg_order_value
+      FROM customers c
+      JOIN orders o ON o.customer_id = c.customer_id
+      WHERE o.status = 'completed'
+      GROUP BY c.segment
+      ORDER BY avg_order_value DESC
+    explanation: "Joins customers with orders, groups by segment, calculates average total_amount per segment."
+    tables: ["customers", "orders"]
+    category: "aggregation"
+    difficulty: "easy"
+
+  - question: "Show me monthly revenue trend for the last 12 months"
+    sql: |
+      SELECT DATE_TRUNC('month', o.order_date) AS month,
+             SUM(oi.line_total) AS revenue
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+        AND o.order_date >= CURRENT_DATE - INTERVAL '12 months'
+      GROUP BY DATE_TRUNC('month', o.order_date)
+      ORDER BY month
+    explanation: "Truncates order_date to month, sums line_total for completed orders in last 12 months, orders chronologically."
+    tables: ["orders", "order_items"]
+    category: "trend"
+    difficulty: "medium"
+
+  - question: "Which categories have the highest cancellation rate?"
+    sql: |
+      SELECT cat.category_name,
+             COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END)::FLOAT / COUNT(*) AS cancellation_rate,
+             COUNT(*) AS total_orders
+      FROM categories cat
+      JOIN products p ON p.category_id = cat.category_id
+      JOIN order_items oi ON oi.product_id = p.product_id
+      JOIN orders o ON o.order_id = oi.order_id
+      GROUP BY cat.category_name
+      HAVING COUNT(*) > 10
+      ORDER BY cancellation_rate DESC
+    explanation: "Joins full chain to get orders per category, calculates ratio of cancelled to total, filters out categories with very few orders."
+    tables: ["categories", "products", "order_items", "orders"]
+    category: "comparison"
+    difficulty: "hard"
+
+  - question: "Who are the top 10 customers by total spending?"
+    sql: |
+      SELECT c.first_name, c.last_name, c.segment,
+             SUM(oi.line_total) AS total_spent,
+             COUNT(DISTINCT o.order_id) AS order_count
+      FROM customers c
+      JOIN orders o ON o.customer_id = c.customer_id
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+      GROUP BY c.customer_id, c.first_name, c.last_name, c.segment
+      ORDER BY total_spent DESC
+      LIMIT 10
+    explanation: "Groups by customer, sums their spending from completed orders, returns top 10."
+    tables: ["customers", "orders", "order_items"]
+    category: "ranking"
+    difficulty: "medium"
+
+  - question: "What percentage of products are out of stock?"
+    sql: |
+      SELECT
+        COUNT(CASE WHEN stock_quantity = 0 THEN 1 END) AS out_of_stock,
+        COUNT(*) AS total_products,
+        ROUND(COUNT(CASE WHEN stock_quantity = 0 THEN 1 END)::NUMERIC / COUNT(*) * 100, 1) AS pct_out_of_stock
+      FROM products
+      WHERE is_active = true
+    explanation: "Counts active products with zero stock vs total active products, calculates percentage."
+    tables: ["products"]
+    category: "aggregation"
+    difficulty: "easy"
+
+  - question: "Compare revenue between Q3 and Q4 of 2024"
+    sql: |
+      SELECT
+        CASE
+          WHEN o.order_date >= '2024-07-01' AND o.order_date < '2024-10-01' THEN 'Q3 2024'
+          WHEN o.order_date >= '2024-10-01' AND o.order_date < '2025-01-01' THEN 'Q4 2024'
+        END AS quarter,
+        SUM(oi.line_total) AS revenue
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+        AND o.order_date >= '2024-07-01'
+        AND o.order_date < '2025-01-01'
+      GROUP BY quarter
+      ORDER BY quarter
+    explanation: "Uses CASE to label each order's quarter, then groups and sums revenue per quarter for comparison."
+    tables: ["orders", "order_items"]
+    category: "comparison"
+    difficulty: "medium"
+
+  - question: "What is the order count and revenue by payment method?"
+    sql: |
+      SELECT o.payment_method,
+             COUNT(*) AS order_count,
+             SUM(oi.line_total) AS total_revenue,
+             AVG(o.total_amount) AS avg_order_value
+      FROM orders o
+      JOIN order_items oi ON oi.order_id = o.order_id
+      WHERE o.status = 'completed'
+      GROUP BY o.payment_method
+      ORDER BY total_revenue DESC
+    explanation: "Groups orders by payment method, counts orders and sums revenue for each method."
+    tables: ["orders", "order_items"]
+    category: "aggregation"
+    difficulty: "easy"

@@ -1,0 +1,199 @@
+# Schema Catalog — Table and Column Definitions
+# This file defines the analytics database schema with human-readable
+# descriptions and business context for RAG retrieval.
+
+tables:
+  - name: regions
+    description: "Geographic regions where customers are located"
+    columns:
+      - name: region_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the region"
+      - name: region_name
+        type: varchar
+        description: "Human-readable region name (e.g., 'North America', 'Western Europe')"
+      - name: country
+        type: varchar
+        description: "Primary country in the region"
+      - name: continent
+        type: varchar
+        description: "Continent the region belongs to"
+
+  - name: categories
+    description: "Product category hierarchy for organizing products"
+    columns:
+      - name: category_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the category"
+      - name: category_name
+        type: varchar
+        description: "Category display name (e.g., 'Electronics', 'Clothing')"
+      - name: description
+        type: text
+        description: "Detailed description of what the category includes"
+      - name: parent_category_id
+        type: integer
+        foreign_key: categories.category_id
+        nullable: true
+        description: "Parent category for hierarchical categorization (NULL = top-level)"
+
+  - name: products
+    description: "Product catalog with pricing, stock levels, and supplier information"
+    columns:
+      - name: product_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the product"
+      - name: product_name
+        type: varchar
+        description: "Full product name including brand and variant"
+      - name: category_id
+        type: integer
+        foreign_key: categories.category_id
+        description: "Category this product belongs to"
+      - name: price
+        type: decimal
+        description: "Current selling price in USD"
+      - name: stock_quantity
+        type: integer
+        description: "Current inventory count (0 = out of stock)"
+      - name: supplier
+        type: varchar
+        nullable: true
+        description: "Name of the supplier/distributor"
+      - name: created_date
+        type: date
+        description: "Date the product was added to the catalog"
+      - name: is_active
+        type: boolean
+        description: "Whether the product is currently available for purchase"
+
+  - name: customers
+    description: "Customer profiles with contact information and segmentation"
+    columns:
+      - name: customer_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the customer"
+      - name: first_name
+        type: varchar
+        description: "Customer's first name"
+      - name: last_name
+        type: varchar
+        description: "Customer's last name"
+      - name: email
+        type: varchar
+        description: "Customer email address (unique per customer)"
+        sensitive: true
+        pii: true
+      - name: phone
+        type: varchar
+        nullable: true
+        description: "Customer phone number"
+        sensitive: true
+        pii: true
+      - name: region_id
+        type: integer
+        foreign_key: regions.region_id
+        description: "Geographic region where the customer is located"
+      - name: signup_date
+        type: date
+        description: "Date the customer created their account"
+      - name: segment
+        type: varchar
+        description: "Customer segment classification: Premium, Regular, Budget, Enterprise"
+
+  - name: orders
+    description: "Customer order transactions with status and payment information"
+    columns:
+      - name: order_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the order"
+      - name: customer_id
+        type: integer
+        foreign_key: customers.customer_id
+        description: "Customer who placed this order"
+      - name: order_date
+        type: date
+        description: "Date the order was placed"
+      - name: status
+        type: varchar
+        description: "Order status: completed, processing, shipped, cancelled, returned"
+      - name: total_amount
+        type: decimal
+        description: "Total order value in USD (sum of all line items minus discounts)"
+      - name: payment_method
+        type: varchar
+        description: "Payment method used: credit_card, debit_card, paypal, bank_transfer, crypto"
+      - name: shipped_date
+        type: date
+        nullable: true
+        description: "Date the order was shipped (NULL if not yet shipped or cancelled)"
+
+  - name: order_items
+    description: "Individual line items within an order — links orders to products"
+    columns:
+      - name: order_item_id
+        type: integer
+        primary_key: true
+        description: "Unique identifier for the line item"
+      - name: order_id
+        type: integer
+        foreign_key: orders.order_id
+        description: "Parent order this item belongs to"
+      - name: product_id
+        type: integer
+        foreign_key: products.product_id
+        description: "Product purchased in this line item"
+      - name: quantity
+        type: integer
+        description: "Number of units purchased"
+      - name: unit_price
+        type: decimal
+        description: "Price per unit at time of purchase (may differ from current product price)"
+      - name: discount
+        type: decimal
+        description: "Total discount applied to this line item in USD"
+      - name: line_total
+        type: decimal
+        description: "Final amount for this line item: (unit_price * quantity) - discount"
+
+# Relationships (explicit JOIN paths)
+relationships:
+  - from_table: customers
+    from_column: region_id
+    to_table: regions
+    to_column: region_id
+    type: many_to_one
+    description: "Each customer belongs to one region"
+
+  - from_table: products
+    from_column: category_id
+    to_table: categories
+    to_column: category_id
+    type: many_to_one
+    description: "Each product belongs to one category"
+
+  - from_table: orders
+    from_column: customer_id
+    to_table: customers
+    to_column: customer_id
+    type: many_to_one
+    description: "Each order is placed by one customer"
+
+  - from_table: order_items
+    from_column: order_id
+    to_table: orders
+    to_column: order_id
+    type: many_to_one
+    description: "Each order item belongs to one order"
+
+  - from_table: order_items
+    from_column: product_id
+    to_table: products
+    to_column: product_id
+    type: many_to_one
+    description: "Each order item references one product"

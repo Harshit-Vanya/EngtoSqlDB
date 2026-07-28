@@ -1,0 +1,105 @@
+# Metric Definitions — SQL formulas for common business metrics
+# These help the LLM generate correct aggregations
+
+metrics:
+  - name: "total_revenue"
+    description: "Total revenue from completed orders"
+    formula: "SUM(oi.line_total)"
+    required_tables: ["order_items oi", "orders o"]
+    required_joins: ["oi.order_id = o.order_id"]
+    filters: "o.status = 'completed'"
+    aggregation: "sum"
+    category: "financial"
+
+  - name: "total_orders"
+    description: "Count of distinct orders"
+    formula: "COUNT(DISTINCT o.order_id)"
+    required_tables: ["orders o"]
+    required_joins: []
+    filters: ""
+    aggregation: "count"
+    category: "operational"
+
+  - name: "average_order_value"
+    description: "Average revenue per order"
+    formula: "SUM(oi.line_total) / COUNT(DISTINCT o.order_id)"
+    required_tables: ["order_items oi", "orders o"]
+    required_joins: ["oi.order_id = o.order_id"]
+    filters: "o.status = 'completed'"
+    aggregation: "ratio"
+    category: "financial"
+
+  - name: "total_customers"
+    description: "Count of distinct customers"
+    formula: "COUNT(DISTINCT c.customer_id)"
+    required_tables: ["customers c"]
+    required_joins: []
+    filters: ""
+    aggregation: "count"
+    category: "customer"
+
+  - name: "revenue_by_region"
+    description: "Revenue broken down by geographic region"
+    formula: "SUM(oi.line_total)"
+    required_tables: ["order_items oi", "orders o", "customers c", "regions r"]
+    required_joins: ["oi.order_id = o.order_id", "o.customer_id = c.customer_id", "c.region_id = r.region_id"]
+    filters: "o.status = 'completed'"
+    group_by: "r.region_name"
+    aggregation: "sum"
+    category: "financial"
+
+  - name: "revenue_by_category"
+    description: "Revenue broken down by product category"
+    formula: "SUM(oi.line_total)"
+    required_tables: ["order_items oi", "products p", "categories cat"]
+    required_joins: ["oi.product_id = p.product_id", "p.category_id = cat.category_id"]
+    group_by: "cat.category_name"
+    aggregation: "sum"
+    category: "financial"
+
+  - name: "monthly_revenue"
+    description: "Revenue aggregated by month"
+    formula: "SUM(oi.line_total)"
+    required_tables: ["order_items oi", "orders o"]
+    required_joins: ["oi.order_id = o.order_id"]
+    filters: "o.status = 'completed'"
+    group_by: "DATE_TRUNC('month', o.order_date)"
+    aggregation: "sum"
+    category: "financial"
+
+  - name: "items_sold"
+    description: "Total quantity of items sold"
+    formula: "SUM(oi.quantity)"
+    required_tables: ["order_items oi"]
+    required_joins: []
+    filters: ""
+    aggregation: "sum"
+    category: "operational"
+
+  - name: "cancellation_rate"
+    description: "Percentage of orders that were cancelled"
+    formula: "COUNT(CASE WHEN o.status = 'cancelled' THEN 1 END)::FLOAT / COUNT(o.order_id)"
+    required_tables: ["orders o"]
+    required_joins: []
+    filters: ""
+    aggregation: "ratio"
+    category: "operational"
+
+  - name: "customer_count_by_segment"
+    description: "Number of customers in each segment"
+    formula: "COUNT(c.customer_id)"
+    required_tables: ["customers c"]
+    required_joins: []
+    filters: ""
+    group_by: "c.segment"
+    aggregation: "count"
+    category: "customer"
+
+  - name: "avg_fulfillment_days"
+    description: "Average days between order placement and shipping"
+    formula: "AVG(o.shipped_date - o.order_date)"
+    required_tables: ["orders o"]
+    required_joins: []
+    filters: "o.shipped_date IS NOT NULL"
+    aggregation: "avg"
+    category: "operational"
