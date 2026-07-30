@@ -1,12 +1,18 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+Creates the application via factory pattern, registers middleware,
+exception handlers, and the API router.
+"""
 
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.app.core.config import get_settings
+from backend.app.core.exceptions import AppException
 from backend.app.core.logging import setup_logging
 
 
@@ -47,17 +53,25 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Health check (always available, no auth)
-    @app.get("/api/v1/health", tags=["health"])
-    async def health_check() -> dict:
-        return {
-            "success": True,
-            "data": {
-                "status": "healthy",
-                "version": settings.app_version,
-                "environment": settings.app_env,
+    # --- Global exception handler for AppException hierarchy ---
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                },
             },
-        }
+        )
+
+    # --- Register API router ---
+    from backend.app.api.routes import router as api_router
+
+    app.include_router(api_router)
 
     return app
 
